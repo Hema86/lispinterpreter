@@ -41,115 +41,60 @@ let env = {
     })
   }
 }
-function evaluater (str) {
-  str = spaceParser(str)
-  let result = numberParser(str)
-  if (result !== null) return result
-  str = spaceParser(str)
-  if (str.startsWith('(')) {
-    str = str.slice(1)
-    if (str.startsWith('+')) {
-      if ('+' in env) {
-        let operandsArr = findOperands(str)
-        return env['+'](operandsArr)
+function evaluater (input) {
+  if (input.startsWith('(')) {
+    input = input.slice(1)
+    let fn = fnParser(input)
+    if (fn in env) {
+      input = input.slice(fn.length)
+      input = spaceParser(input)
+      let args = []
+      while (!input.startsWith(')')) {
+        if (input.startsWith('(')) {
+          let result = evaluater(input)
+          args.push(result)
+          input = input.slice(input.indexOf(')') + 1)
+          input = spaceParser(input)
+        } else {
+          let result = numberParser(input)
+          if (result !== null) { args.push(result) }
+          input = input.slice(1)
+          input = spaceParser(input)
+        }
+      }
+      return env[fn](args)
+    } else {
+      if (fn === 'if') {
+        input = input.slice(fn.length)
+        input = spaceParser(input)
+        let test = input.substring(0, input.indexOf(')') + 1)
+        input = input.slice(input.indexOf(')') + 1)
+        input = spaceParser(input)
+        let conseq = input.substring(0, input.indexOf(')') + 1)
+        input = input.slice(input.indexOf(')') + 1)
+        input = spaceParser(input)
+        let alt = input.substring(0, input.indexOf(')') + 1)
+        input = input.slice(input.indexOf(')') + 1)
+        input = spaceParser(input)
+        if (evaluater(test)) return evaluater(conseq)
+        else return evaluater(alt)
+      }
+      if (fn === 'define') {
+        input = input.slice(fn.length)
+        input = spaceParser(input)
+        let key = input.substring(0, input.indexOf(' '))
+        input = input.slice(input.indexOf(' '))
+        input = spaceParser(input)
+        let val = input.substring(0, input.indexOf(')'))
+        env[key] = val * 1
+        return 'new property to env'
       }
     }
-    if (str.startsWith('-')) {
-      if ('-' in env) {
-        let operandsArr = findOperands(str)
-        return env['-'](operandsArr)
-      }
-    }
-    if (str.startsWith('*')) {
-      if ('*' in env) {
-        let operandsArr = findOperands(str)
-        return env['*'](operandsArr)
-      }
-    }
-    if (str.startsWith('/')) {
-      if ('/' in env) {
-        let operandsArr = findOperands(str)
-        return env['/'](operandsArr)
-      }
-    }
-    if (str.startsWith('%')) {
-      if ('%' in env) {
-        let operandsArr = findOperands(str)
-        return env['%'](operandsArr)
-      }
-    }
-    if (str.startsWith('=')) {
-      if ('=' in env) {
-        let operandsArr = findOperands(str)
-        return env['='](operandsArr)
-      }
-    }
-    if (str.startsWith('>')) {
-      if ('>' in env) {
-        let operandsArr = findOperands(str)
-        return env['>'](operandsArr)
-      }
-    }
-    if (str.startsWith('<')) {
-      if ('<' in env) {
-        let operandsArr = findOperands(str)
-        return env['<'](operandsArr)
-      }
-    }
-
-    if (str.startsWith('if')) {
-      str = str.slice(2)
-      str = spaceParser(str)
-      let test = str.substring(0, str.indexOf(')'))
-      str = str.slice(test.length + 1)
-      str = spaceParser(str)
-      let conseq = str.substring(0, str.indexOf(' '))
-      str = str.slice(conseq.length)
-      str = spaceParser(str)
-      let alt = str.substring(0)
-      str = str.slice(alt.length)
-      str = spaceParser(str)
-      if (evaluater(test)) result = evaluater(conseq)
-      else result = evaluater(alt)
-      return result
-    }
-    if (str.startsWith('define')) {
-      str = str.slice(6)
-      str = spaceParser(str)
-      let key = str.substring(0, str.indexOf(' '))
-      str = str.slice(1)
-      str = spaceParser(str)
-      let val = str * 1
-      env[key] = val
-    }
-    if (str.startsWith('begin')) {
-      str = str.slice(6)
-      str = spaceParser(str)
-      let def = str.substring(0, str.indexOf(')') + 1)
-      evaluater(def)
-      str = str.slice(def.length)
-      str = spaceParser(str)
-      return evaluater(str)
-    }
-    // if (str.startsWith('quote')) {
-    //   str = str.slice(6)
-    //   str = spaceParser(str)
-    // }
-    // if (str.startsWith('set')) {
-    // }
   }
 }
-function findOperands (str) {
-  str = str.slice(1)
-  str = spaceParser(str)
-  if (str.endsWith(')')) {
-    str = str.substring(0, str.indexOf(')'))
-    str = spaceParser(str)
-    return str.split(' ')
-  }
-  return str.split(' ')
+function fnParser (str) {
+  return str.slice(0, str.indexOf(' '))
 }
-
 function numberParser (str) {
   let regEx = /^-?(0|[\d1-9]\d*)(\.\d+)?(?:[Ee][+-]?\d+)?/
   let value = str.match(regEx)
@@ -161,9 +106,9 @@ function spaceParser (str) {
   str = str.replace(regex, '')
   return str
 }
-let result = evaluater('(begin (define x 8)')
+let result = evaluater('(define x 8)')
 console.log(result)
-// let res = evaluater('(* 1 2)')
-// console.log(res)
-let res1 = evaluater('(if (= 1 6) 5 6)')
-console.log(res1)
+let res = evaluater('(if (= 2 5) (* 2 2) (/ 2 2))')
+console.log(res)
+// let res1 = sexpression('(+ (+ 1 4) (* 3 2))')
+// console.log(res1)
