@@ -58,20 +58,21 @@ function evaluater (input) {
   if (input.startsWith('(')) {
     input = input.slice(1)
     let fn = identifier(input)
-    if (fn in current) return sExpression(input)
-    if (current['parent'] !== undefined) {
-      if (fn in current['parent']) return sExpression(input)
+    if (fn in current) {
+      if (current[fn]['type'] === 'lambda') return procedure(input)
+      else return sExpression(input)
     }
-    if (current['args'] !== undefined) {
-      return sExpression(input)
-    } else return specialForm(input)
+    if (current['parent'] === undefined) return specialForm(input)
+    if (fn in current['parent']) return sExpression(input)
+    if (fn in current['args']) return sExpression(input)
+    else return specialForm(input)
   }
   if (strParser(input) !== null) return strParser(input)
 }
 
 function sExpression (input) {
   let fn = identifier(input)
-  if (typeof (current[fn]) === 'object') return procedure(input)
+  // if (typeof (current[fn]) === 'object') return procedure(input)
   // current = current['parent']
   input = input.slice(fn.length)
   input = spaceParser(input)
@@ -93,6 +94,12 @@ function sExpression (input) {
           args.push(current['args'][val])
           input = input.slice(val.length)
           input = spaceParser(input)
+        } else {
+          let result = evaluater(input)
+          if (result !== null) { args.push(result[0]) }
+          result = result[0].toString()
+          input = input.slice(result.length)
+          input = spaceParser(input)
         }
       } else {
         let result = evaluater(input)
@@ -102,8 +109,9 @@ function sExpression (input) {
         input = spaceParser(input)
       }
     }
-  } current = ENV
-  return [current[fn](args), spaceParser(input.slice(1))]
+  } if (fn in ENV && (typeof (ENV[fn]) === 'object')) return procedure(fn + ' ' + args + ')')
+  else if (current !== ENV) return [current['parent'][fn](args), spaceParser(input.slice(1))]
+  else return [current[fn](args), spaceParser(input.slice(1))]
 }
 function specialForm (input) {
   if (input.startsWith('if')) return parserIf(input)
@@ -111,6 +119,7 @@ function specialForm (input) {
   if (input.startsWith('begin')) return parserBegin(input)
   if (input.startsWith('\'') || input.startsWith('quote')) return parserQuote(input)
   if (input.startsWith('lambda')) return parserLambda(input)
+  // if (input.startsWith('list')) return parserList(input)
 }
 function parserIf (input) {
   input = input.slice(2)
@@ -118,9 +127,11 @@ function parserIf (input) {
   let result = evaluater(input)
   let conseq = evaluater(result[1])
   if (conseq[1].startsWith(')')) return 'Invalid expression'
-  let alt = evaluater(conseq[1])
-  if (result[0] === true) return conseq[0]
-  else return alt[0]
+  if (result[0] === true) return [conseq[0], conseq[1]]
+  else {
+    let alt = evaluater(spaceParser(conseq[1]))
+    return [alt[0], alt[1]]
+  }
 }
 
 function parserDef (input) {
@@ -157,6 +168,7 @@ function parserLambda (input) {
   input = input.slice(6)
   input = spaceParser(input)
   let result = {}
+  result['type'] = 'lambda'
   result['env'] = {}
   result['env']['parent'] = ENV
   result['env']['args'] = {}
@@ -168,7 +180,7 @@ function parserLambda (input) {
   }
   input = input.slice(1)
   input = spaceParser(input)
-  result['env']['eval'] = input.substring(0, input.indexOf(')') + 1)
+  result['env']['eval'] = input
   // console.log(result)
   return [result, input.slice(result['env']['eval'])]
 }
@@ -196,28 +208,50 @@ function spaceParser (str) {
 }
 function procedure (input) {
   let fn = identifier(input)
+  if (current === ENV) current = current[fn]['env']
   // current = current['env']
   input = input.slice(fn.length)
   input = spaceParser(input)
-  while (!input.startsWith(')')) {
-    let result = evaluater(input)
-    for (let key in current[fn]['env']['args']) {
-      current[fn]['env']['args'][key] = result[0]
+  if (!input.startsWith('0')) {
+    while (!input.startsWith(')')) {
+      let result = evaluater(input)
+      for (let key in current['args']) {
+        current['args'][key] = result[0]
+      }
+      result = result[0].toString()
+      input = input.slice(result.length)
+      input = spaceParser(input)
     }
-    result = result[0].toString()
-    input = input.slice(result.length)
-    input = spaceParser(input)
+    let result = evalLambda(current)
+    return [result[0], ')']
   }
-  current = current[fn]['env']
-  let result = evaluater(current['eval'])
-  return result[0]
+}
+function evalLambda (obj) {
+  let result = evaluater(obj['eval'])
+  // console.log(result)
+  return result
 }
 
-function repl () {
-  var stdin = process.openStdin()
-  stdin.addListener('data', function (input) {
-    let res = evaluater(input.toString().trim(), null)
-    if (res !== null) console.log(JSON.stringify(res))
-  })
-}
-repl()
+// function repl () {
+//   var stdin = process.openStdin()
+//   stdin.addListener('data', function (input) {
+//     let res = evaluater(input.toString().trim(), null)
+//     if (res !== null) console.log(JSON.stringify(res))
+//   })
+// }
+// // repl()
+// console.log(evaluater('(define square (lambda (x) (* x x)))'))
+// console.log(evaluater('(square 10)'))
+// console.log(evaluater('(define x 8)'))
+// console.log(evaluater('(if (< 10 20) (* x x) 5)'))
+// console.log(evaluater('(if (= (- 4 2) 2) (+ (* 2 5) (/ 4 2)) (+ (+ 1 7) (+ 4 3))'))
+// console.log(evaluater('(begin (define r 10) (* pi (* r r)))'))
+// console.log(evaluater('(+ (+ x (+ x (+ 1))) (* (* 2 4) x))'))
+// console.log(evaluater('(define (define g 4) 4)'))
+// console.log(evaluater('(quote (+ 1 2))'))
+// console.log(evaluater('(lambda (r) (* pi (* r r)))'))
+// console.log(evaluater('(define r (* 6 7))'))
+console.log(evaluater('(define fact (lambda (n) (if (<= n 1) 1 (* n (fact (- n 1))))))'))
+console.log(evaluater('(fact 5)'))
+// console.log(evaluater('(define r 10)'))
+// console.log(evaluater('(* pi (* r r))'))
