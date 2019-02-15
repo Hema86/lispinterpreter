@@ -55,6 +55,10 @@ let ENV = {
     let result = evaluater(obj['eval'])
     // console.log(result)
     return result
+  },
+  'cons': function addElement (arr) {
+    arr[1].unshift(arr[0])
+    return arr[1]
   }
 }
 let current = ENV
@@ -62,6 +66,7 @@ function evaluater (input) {
   if (numberParser(input) !== null) return numberParser(input)
   if (input.startsWith('(')) {
     input = input.slice(1)
+    if (input.startsWith('(')) return evaluater(input)
     let fn = identifier(input)
     if (fn in current) {
       if (fn === 'lambda') return parserLambda(input)
@@ -82,9 +87,13 @@ function sExpression (input) {
   let args = []
   while (!input.startsWith(')')) {
     if (input.startsWith('(')) {
-      input = input.slice(1)
-      let result = sExpression(input)
+      // input = input.slice(1)
+      let result = evaluater(input)
       if (!Array.isArray(result)) {
+        args.push(result)
+        break
+      }
+      if (typeof result[1] !== 'string') {
         args.push(result)
         break
       }
@@ -122,7 +131,7 @@ function sExpression (input) {
         input = spaceParser(input)
       }
     }
-  } if (fn in ENV && (typeof (ENV[fn]) === 'object')) return procedure(fn + ' ' + args + ')')
+  } if (fn in ENV && (typeof (ENV[fn]) === 'object')) return valueAssigner(fn + ' ' + args.join(' ') + ')')
   else if (current !== ENV) return [current['parent'][fn](args), spaceParser(input.slice(1))]
   else return [current[fn](args), spaceParser(input.slice(1))]
 }
@@ -177,9 +186,14 @@ function parserQuote (input) {
   }
   if (input.startsWith('quote')) {
     input = input.slice(5)
+    input = spaceParser(input)
+    let result = input.substring(0, input.indexOf(')'))
+    if (result.startsWith('[') && result.endsWith(']')) {
+      let itsArray = []
+      return [itsArray, input.slice(result.length + 1)]
+    }
+    return [result, input.slice(result.length + 1)]
   }
-  input = spaceParser(input)
-  return input.substring(0, input.length - 1)
 }
 
 let array = []
@@ -190,7 +204,7 @@ function parserList (input) {
   while (!input.startsWith(')')) {
     let result = evaluater(input)
     array.push(result[0])
-    input = result[1]
+    input = spaceParser(result[1])
     // input = spaceParser(input)
   }
   return array
@@ -206,8 +220,9 @@ function parserLambda (input) {
   result['env']['args'] = {}
   if (input.startsWith('(')) input = input.slice(1)
   while (!input.startsWith(')')) {
-    result['env']['args'][input.substring(0, 1)] = null
-    input = input.slice(1)
+    let arg = evaluater(input)
+    result['env']['args'][arg[0]] = null
+    input = input.slice(arg[0].length)
     input = spaceParser(input)
   }
   input = input.slice(1)
@@ -241,7 +256,7 @@ function spaceParser (str) {
   return str
 }
 
-function procedure (input) {
+function valueAssigner (input) {
   let fn = identifier(input)
   current = ENV
   current = current[fn]['env']
@@ -249,13 +264,13 @@ function procedure (input) {
   input = input.slice(fn.length)
   input = spaceParser(input)
   while (!input.startsWith(')')) {
-    let result = evaluater(input)
     for (let key in current['args']) {
+      let result = evaluater(input)
       current['args'][key] = result[0]
+      result = result[0].toString()
+      input = input.slice(result.length)
+      input = spaceParser(input)
     }
-    result = result[0].toString()
-    input = input.slice(result.length)
-    input = spaceParser(input)
   }
   return ENV['lambda'](current)
 }
